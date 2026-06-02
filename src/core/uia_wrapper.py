@@ -222,6 +222,57 @@ class UIAWrapper:
         ctrl = getter(searchDepth=10, **kwargs)
         return ctrl.GetChildren() if ctrl.Exists() else []
 
+    def find_chat_input(self) -> object:
+        """Find the chat input field (mmui::ChatInputField) — WeChat 4.x specific."""
+        if self._use_findall_bypass and self._hwnd:
+            client = _ensure_com_client()
+            import comtypes.gen.UIAutomationClient as UIA
+            root = client.ElementFromHandle(self._hwnd)
+            all_e = root.FindAll(UIA.TreeScope_Subtree, client.CreateTrueCondition())
+            for i in range(all_e.Length):
+                e = all_e.GetElement(i)
+                if e.CurrentClassName == "mmui::ChatInputField":
+                    return _ComControlProxy(e, self._hwnd)
+        return self.find_control(class_name="mmui::ChatInputField")
+
+    def find_send_button(self) -> object:
+        """Find the send button (mmui::XOutlineButton name=发送)."""
+        if self._use_findall_bypass and self._hwnd:
+            client = _ensure_com_client()
+            import comtypes.gen.UIAutomationClient as UIA
+            root = client.ElementFromHandle(self._hwnd)
+            all_e = root.FindAll(UIA.TreeScope_Subtree, client.CreateTrueCondition())
+            for i in range(all_e.Length):
+                e = all_e.GetElement(i)
+                if e.CurrentName == "发送" and e.CurrentClassName == "mmui::XOutlineButton":
+                    return _ComControlProxy(e, self._hwnd)
+        return self.find_control(name="发送", class_name="mmui::XOutlineButton")
+
+    def find_by_class_name(self, class_name: str, position: str = "any") -> object:
+        """Find element by class name, optionally filtered by position (top/bottom/any)."""
+        if self._use_findall_bypass and self._hwnd:
+            client = _ensure_com_client()
+            import comtypes.gen.UIAutomationClient as UIA
+            root = client.ElementFromHandle(self._hwnd)
+            all_e = root.FindAll(UIA.TreeScope_Subtree, client.CreateTrueCondition())
+            candidates = []
+            for i in range(all_e.Length):
+                e = all_e.GetElement(i)
+                if e.CurrentClassName == class_name:
+                    try:
+                        br = e.CurrentBoundingRectangle
+                        candidates.append((br.top, e))
+                    except:
+                        pass
+            if not candidates:
+                return None
+            if position == "bottom":
+                candidates.sort(key=lambda x: -x[0])
+            elif position == "top":
+                candidates.sort(key=lambda x: x[0])
+            return _ComControlProxy(candidates[0][1], self._hwnd)
+        return self.find_control(class_name=class_name)
+
     def click(self, control) -> bool:
         """点击控件（支持 comtypes proxy 和 uiautomation Control）。"""
         try:
