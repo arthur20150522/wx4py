@@ -589,12 +589,28 @@ class ChatWindow(BasePage):
         return None
 
     def _get_chat_input(self):
-        """获取聊天输入框"""
-        # 尝试多种方法查找聊天输入框，以兼容不同微信版本
-        possible_ids = ['chat_input_field', 'input_field', 'msg_input', 'edit_input']
-        possible_class_names = ['mmui::XTextEdit', 'mmui::XValidatorTextEdit', 'mmui::XEditEx', 'mmui::XRichEdit']
+        """获取聊天输入框 — 支持 WeChat 4.x mmui::ChatInputField"""
+        # WeChat 4.x: find mmui::ChatInputField via FindAll bypass
+        if hasattr(self.uia, '_use_findall_bypass') and self.uia._use_findall_bypass:
+            try:
+                from ..core.uia_wrapper import _ensure_com_client
+                import comtypes.gen.UIAutomationClient as UIA
+                client = _ensure_com_client()
+                root = client.ElementFromHandle(self._window.hwnd)
+                all_e = root.FindAll(UIA.TreeScope_Subtree, client.CreateTrueCondition())
+                for i in range(all_e.Length):
+                    e = all_e.GetElement(i)
+                    if e.CurrentClassName == "mmui::ChatInputField":
+                        from ..core.uia_wrapper import _ComControlProxy
+                        logger.debug(f"FindAll: ChatInputField found")
+                        return _ComControlProxy(e, self._window.hwnd)
+            except Exception as e:
+                logger.debug(f"FindAll ChatInputField fallback: {e}")
 
-        # 先按 AutomationId 查找
+        # Legacy approach: search for Edit controls
+        possible_ids = ['chat_input_field', 'input_field', 'msg_input', 'edit_input']
+        possible_class_names = ['mmui::XTextEdit', 'mmui::XValidatorTextEdit', 'mmui::XEditEx', 'mmui::XRichEdit', 'mmui::ChatInputField']
+
         for auto_id in possible_ids:
             try:
                 edit = self.root.EditControl(AutomationId=auto_id)
@@ -603,21 +619,17 @@ class ChatWindow(BasePage):
             except Exception:
                 continue
 
-        # 按 ClassName 查找
         for class_name in possible_class_names:
             try:
                 edit = self.root.EditControl(ClassName=class_name)
-                # 额外检查：聊天输入框应在窗口下半部分
                 if edit.Exists(maxSearchSeconds=0.5):
                     rect = edit.BoundingRectangle
                     root_rect = self.root.BoundingRectangle
-                    # 聊天输入框通常在窗口下半部
                     if rect and root_rect and rect.top > (root_rect.top + root_rect.height() * 0.5):
                         return edit
             except Exception:
                 continue
 
-        # 最后手段：查找所有 EditControl 并挑选最可能是聊天输入框的
         try:
             edits = self.root.GetChildren()
             candidates = []
@@ -626,10 +638,8 @@ class ChatWindow(BasePage):
                     rect = ctrl.BoundingRectangle
                     root_rect = self.root.BoundingRectangle
                     if rect and root_rect:
-                        # 优先选择底部区域的编辑框
                         score = rect.top - root_rect.top
                         candidates.append((score, ctrl))
-
             if candidates:
                 candidates.sort(key=lambda x: x[0], reverse=True)
                 return candidates[0][1]
