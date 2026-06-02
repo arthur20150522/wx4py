@@ -395,25 +395,56 @@ class _ComControlProxy:
             raise RuntimeError(f"Click failed: {e}")
 
     def send_keys(self, text: str):
-        """Send text via ValuePattern.SetValue or clipboard paste."""
-        import comtypes.gen.UIAutomationClient as UIA
-        import time, pyperclip, win32api, win32con
+        """Send text. Uses clipboard paste for non-Edit controls (e.g. ChatInputField)."""
+        import time, pyperclip, win32api, win32con, ctypes
+        
+        cls = self._elem.CurrentClassName or ""
+        
+        # For Edit controls with ValuePattern, try SetValue first
+        if "Edit" in cls or "Validator" in cls:
+            try:
+                import comtypes.gen.UIAutomationClient as UIA
+                vp = self._elem.GetCurrentPattern(UIA.UIA_ValuePatternId)
+                vp.QueryInterface(UIA.IUIAutomationValuePattern).SetValue(text)
+                return
+            except Exception:
+                pass
+        
+        # For all controls (especially ChatInputField): click → paste → Enter/keep
         try:
-            vp = self._elem.GetCurrentPattern(UIA.UIA_ValuePatternId)
-            vp.QueryInterface(UIA.IUIAutomationValuePattern).SetValue(text)
-            return
-        except Exception:
-            pass
-        # Fallback: focus + clipboard paste
-        try:
-            self._elem.SetFocus()
+            # Click to focus
+            br = self._elem.CurrentBoundingRectangle
+            cx = (br.left + br.right) // 2
+            cy = (br.top + br.bottom) // 2
+            ctypes.windll.user32.SetCursorPos(cx, cy)
+            time.sleep(0.05)
+            ctypes.windll.user32.mouse_event(0x0002, 0, 0, 0, 0)
+            time.sleep(0.05)
+            ctypes.windll.user32.mouse_event(0x0004, 0, 0, 0, 0)
             time.sleep(0.1)
+            
+            # Clear existing: Ctrl+A, Delete
+            ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, 0, 0)
+            time.sleep(0.03)
+            ctypes.windll.user32.keybd_event(0x41, 0, 0, 0)
+            time.sleep(0.03)
+            ctypes.windll.user32.keybd_event(0x41, 0, win32con.KEYEVENTF_KEYUP, 0)
+            ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
+            time.sleep(0.05)
+            ctypes.windll.user32.keybd_event(win32con.VK_DELETE, 0, 0, 0)
+            time.sleep(0.03)
+            ctypes.windll.user32.keybd_event(win32con.VK_DELETE, 0, win32con.KEYEVENTF_KEYUP, 0)
+            time.sleep(0.1)
+            
+            # Clipboard paste
             pyperclip.copy(text)
-        except:
-            pass
-        win32api.keybd_event(win32con.VK_CONTROL, 0, 0, 0)
-        time.sleep(0.05)
-        win32api.keybd_event(0x56, 0, 0, 0)
-        time.sleep(0.05)
-        win32api.keybd_event(0x56, 0, win32con.KEYEVENTF_KEYUP, 0)
-        win32api.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
+            time.sleep(0.05)
+            ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, 0, 0)
+            time.sleep(0.03)
+            ctypes.windll.user32.keybd_event(0x56, 0, 0, 0)
+            time.sleep(0.03)
+            ctypes.windll.user32.keybd_event(0x56, 0, win32con.KEYEVENTF_KEYUP, 0)
+            ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
+            return
+        except Exception as e:
+            raise RuntimeError(f"SendKeys failed: {e}")
