@@ -357,42 +357,52 @@ class _ComControlProxy:
         """Send text — handles uiautomation special keys {Ctrl}a, {Delete}, {Enter}, {Esc}."""
         import re, ctypes, win32con, time
         
-        # Handle special key sequences
-        if text.startswith("{") and text.endswith("}"):
-            key = text[1:-1].lower()
-            if key == "ctrl}a":
-                ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, 0, 0)
-                time.sleep(0.03)
-                ctypes.windll.user32.keybd_event(0x41, 0, 0, 0)
-                time.sleep(0.03)
-                ctypes.windll.user32.keybd_event(0x41, 0, win32con.KEYEVENTF_KEYUP, 0)
-                ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
-                return
-            elif key == "ctrl}v":
-                ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, 0, 0)
-                time.sleep(0.03)
-                ctypes.windll.user32.keybd_event(0x56, 0, 0, 0)
-                time.sleep(0.03)
-                ctypes.windll.user32.keybd_event(0x56, 0, win32con.KEYEVENTF_KEYUP, 0)
-                ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
-                return
-            elif key in ("delete", "del"):
-                ctypes.windll.user32.keybd_event(win32con.VK_DELETE, 0, 0, 0)
-                time.sleep(0.03)
-                ctypes.windll.user32.keybd_event(win32con.VK_DELETE, 0, win32con.KEYEVENTF_KEYUP, 0)
-                return
-            elif key in ("enter", "return"):
-                ctypes.windll.user32.keybd_event(win32con.VK_RETURN, 0, 0, 0)
-                time.sleep(0.03)
-                ctypes.windll.user32.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
-                return
-            elif key == "esc":
-                ctypes.windll.user32.keybd_event(win32con.VK_ESCAPE, 0, 0, 0)
-                time.sleep(0.03)
-                ctypes.windll.user32.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
-                return
+        # Handle special key sequences: {Modifier}key or {KeyName}
+        if text.startswith("{"):
+            match = re.match(r'\{(\w+)\}(.*)', text)
+            if match:
+                modifier = match.group(1).lower()
+                rest = match.group(2).lower()
+                
+                # {Ctrl}a → Ctrl+A
+                if modifier == "ctrl" and rest == "a":
+                    ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, 0, 0); time.sleep(0.03)
+                    ctypes.windll.user32.keybd_event(0x41, 0, 0, 0); time.sleep(0.03)
+                    ctypes.windll.user32.keybd_event(0x41, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    return
+                # {Ctrl}v → Ctrl+V
+                if modifier == "ctrl" and rest == "v":
+                    ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, 0, 0); time.sleep(0.03)
+                    ctypes.windll.user32.keybd_event(0x56, 0, 0, 0); time.sleep(0.03)
+                    ctypes.windll.user32.keybd_event(0x56, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    return
+                # {Ctrl}{Enter} etc
+                if modifier == "ctrl" and rest == "{enter}":
+                    ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, 0, 0); time.sleep(0.03)
+                    ctypes.windll.user32.keybd_event(win32con.VK_RETURN, 0, 0, 0); time.sleep(0.03)
+                    ctypes.windll.user32.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    ctypes.windll.user32.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    return
+                
+                # {Delete}
+                if modifier == "delete" or modifier == "del":
+                    ctypes.windll.user32.keybd_event(win32con.VK_DELETE, 0, 0, 0); time.sleep(0.03)
+                    ctypes.windll.user32.keybd_event(win32con.VK_DELETE, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    return
+                # {Enter}
+                if modifier == "enter" or modifier == "return":
+                    ctypes.windll.user32.keybd_event(win32con.VK_RETURN, 0, 0, 0); time.sleep(0.03)
+                    ctypes.windll.user32.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    return
+                # {Esc}
+                if modifier == "esc":
+                    ctypes.windll.user32.keybd_event(win32con.VK_ESCAPE, 0, 0, 0); time.sleep(0.03)
+                    ctypes.windll.user32.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    return
         
-        # Normal text: use send_keys (clipboard paste)
+        # Normal text: use clipboard paste
         return self.send_keys(text)
 
     def SetFocus(self):
