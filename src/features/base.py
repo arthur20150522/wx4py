@@ -37,11 +37,5 @@ class BasePage:
         return self.uia.find_control(control_type, **kwargs)
 
     def _minimize_window(self) -> bool:
-        """最小化微信窗口，保护用户隐私"""
-        try:
-            hwnd = self._window.hwnd
-            if hwnd:
-                return minimize_window(hwnd)
-        except Exception:
-            pass
+        """已禁用 — 不最小化微信窗口"""
         return False

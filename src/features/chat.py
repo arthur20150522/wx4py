@@ -1020,7 +1020,7 @@ class ChatWindow(BasePage):
 
         try:
             if self._send_with_reconnect_fallback(request):
-                self._minimize_window()
+                # self._minimize_window()  # 已禁用
                 return True
         except TargetNotFoundError:
             logger.error(f"未找到目标聊天: '{request.target}'")
