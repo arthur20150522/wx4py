@@ -261,7 +261,7 @@ class UIAWrapper:
 
 
 class _ComControlProxy:
-    """Proxy object that wraps a comtypes IUIAutomationElement with Click/SendKeys."""
+    """Proxy object that wraps a comtypes IUIAutomationElement with uiautomation-compatible API."""
 
     def __init__(self, elem, hwnd: int):
         self._elem = elem
@@ -269,6 +269,8 @@ class _ComControlProxy:
         self.Name = elem.CurrentName or ""
         self.ClassName = elem.CurrentClassName or ""
         self.AutomationId = elem.CurrentAutomationId or ""
+        self.ControlType = elem.CurrentControlType
+        self.ControlTypeName = ""  # filled later if needed
         try:
             br = elem.CurrentBoundingRectangle
             self.BoundingRectangle = type("Rect", (), {
@@ -287,6 +289,36 @@ class _ComControlProxy:
                     "height": br.bottom - br.top}
         except:
             return {}
+
+    # --- PascalCase aliases (uiautomation compatibility) ---
+
+    def Click(self, simulateMove: bool = False):
+        """Click via InvokePattern or mouse fallback (compatible with uiautomation)."""
+        return self.click(simulateMove)
+
+    def DoubleClick(self, simulateMove: bool = False):
+        """Double-click."""
+        self.click(simulateMove)
+        import time; time.sleep(0.1)
+        self.click(simulateMove)
+
+    def SendKeys(self, text: str):
+        """Send text via ValuePattern or clipboard (compatible with uiautomation)."""
+        return self.send_keys(text)
+
+    def SetFocus(self):
+        try:
+            self._elem.SetFocus()
+        except:
+            pass
+
+    def Exists(self, maxSearchSeconds: float = 0) -> bool:
+        return True  # Already resolved by FindAll
+
+    def GetChildren(self):
+        return []  # Can't traverse; use FindAll for full tree
+
+    # --- Internal implementations ---
 
     def click(self, simulateMove: bool = False):
         """Click via InvokePattern or mouse fallback."""
@@ -334,15 +366,3 @@ class _ComControlProxy:
         time.sleep(0.05)
         win32api.keybd_event(0x56, 0, win32con.KEYEVENTF_KEYUP, 0)
         win32api.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
-
-    def SetFocus(self):
-        try:
-            self._elem.SetFocus()
-        except:
-            pass
-
-    def Exists(self, maxSearchSeconds: float = 0) -> bool:
-        return True  # Already resolved
-
-    def GetChildren(self):
-        return []  # Not traversable via this proxy
