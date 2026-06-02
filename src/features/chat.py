@@ -95,6 +95,7 @@ class ChatWindow(BasePage):
         self._last_search_results: Dict[str, List[SearchResult]] = {}
         self._run_id = str(uuid.uuid4())
         self._recent_send_records: Dict[str, float] = {}
+        self._cached_input_key: str = None  # RuntimeId cache for ChatInputField
 
     # ==================== 私有方法 ====================
 
@@ -590,21 +591,34 @@ class ChatWindow(BasePage):
 
     def _get_chat_input(self):
         """获取聊天输入框 — 支持 WeChat 4.x mmui::ChatInputField"""
-        # WeChat 4.x: find mmui::ChatInputField via FindAll bypass
+        # WeChat 4.x: find mmui::ChatInputField via FindAll bypass (with RuntimeId cache)
         if hasattr(self.uia, '_use_findall_bypass') and self.uia._use_findall_bypass:
             try:
-                from ..core.uia_wrapper import _ensure_com_client
+                from ..core.uia_wrapper import _ensure_com_client, _ComControlProxy
                 import comtypes.gen.UIAutomationClient as UIA
                 client = _ensure_com_client()
                 root = client.ElementFromHandle(self._window.hwnd)
-                all_e = root.FindAll(UIA.TreeScope_Subtree, client.CreateTrueCondition())
+                
+                # Try cached element first (avoids FindAll every time)
+                if self._cached_input_key:
+                    condition = client.CreateTrueCondition()
+                    all_e = root.FindAll(UIA.TreeScope_Subtree, condition)
+                    for i in range(all_e.Length):
+                        e = all_e.GetElement(i)
+                        key = '-'.join(str(x) for x in e.GetRuntimeId())
+                        if key == self._cached_input_key and e.CurrentClassName == "mmui::ChatInputField":
+                            return _ComControlProxy(e, self._window.hwnd)
+                
+                # Cache miss: full scan, then cache
+                condition = client.CreateTrueCondition()
+                all_e = root.FindAll(UIA.TreeScope_Subtree, condition)
                 for i in range(all_e.Length):
                     e = all_e.GetElement(i)
                     if e.CurrentClassName == "mmui::ChatInputField":
-                        from ..core.uia_wrapper import _ComControlProxy
-                        logger.debug(f"FindAll: ChatInputField found")
+                        self._cached_input_key = '-'.join(str(x) for x in e.GetRuntimeId())
                         return _ComControlProxy(e, self._window.hwnd)
             except Exception as e:
+                self._cached_input_key = None  # invalidate on error
                 logger.debug(f"FindAll ChatInputField fallback: {e}")
 
         # Legacy approach: search for Edit controls
